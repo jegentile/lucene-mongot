@@ -76,8 +76,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     // hotspot misses some SSE intrinsics, workaround it
     // to be fair, they do document this thing only works well with AVX2/AVX3 and Neon
     boolean isAMD64withoutAVX2 = Constants.OS_ARCH.equals("amd64") && VECTOR_BITSIZE < 256;
+    // On aarch64 with only 128-bit vectors (e.g. AWS Graviton with NEON), the vectorized
+    // 128-bit integer paths are ~3x slower than scalar due to expensive byte->short->int
+    // widening conversions and half-vector waste. The scalar fallback is faster because
+    // HotSpot C2 can auto-vectorize it using native SDOT-like instructions.
+    boolean isAarch64without256 = Constants.OS_ARCH.equals("aarch64") && VECTOR_BITSIZE < 256;
     HAS_FAST_INTEGER_VECTORS =
-        VectorizationProvider.TESTS_FORCE_INTEGER_VECTORS || (isAMD64withoutAVX2 == false);
+        VectorizationProvider.TESTS_FORCE_INTEGER_VECTORS
+            || (isAMD64withoutAVX2 == false && isAarch64without256 == false);
   }
 
   // the way FMA should work! if available use it, otherwise fall back to mul/add
